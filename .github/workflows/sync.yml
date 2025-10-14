@@ -1,0 +1,24 @@
+name: Sync HR to Postgres
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"     # каждые 30 минут (UTC)
+  workflow_dispatch: {}        # можно запустить вручную
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install psycopg2-binary requests pandas numpy
+
+      - name: Run sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SHEET_URL: ${{ secrets.SHEET_URL }}
+        run: python sync_hr.py
