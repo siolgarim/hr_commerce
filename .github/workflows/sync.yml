@@ -2,7 +2,7 @@ name: Sync HR to Postgres
 
 on:
   schedule:
-    - cron: "1/30 * * * *"     # каждые 1,30 минут (UTC)
+    - cron: "0 5 * * *"     # каждый день в 05:00 UTC = 08:00 по Москве
   workflow_dispatch: {}        # можно запустить вручную
 
 jobs:
