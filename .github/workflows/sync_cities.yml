@@ -1,0 +1,25 @@
+name: Sync Cities to Postgres
+
+on:
+  workflow_dispatch:  # запуск вручную через Actions
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pandas psycopg2-binary numpy requests
+
+      - name: Run sync_cities.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CITIES_SHEET_URL: ${{ secrets.CITIES_SHEET_URL }}
+        run: python sync_cities.py
