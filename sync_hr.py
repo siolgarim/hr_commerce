@@ -3,10 +3,10 @@ import os, io, re, requests, psycopg2
 import pandas as pd
 import numpy as np
 
-# В секрете укажите ссылку на лист "Численность РИМ" (gid=0)
-SHEET_URL    = os.environ.get("SHEET_URL")      # из Secrets, например: .../edit?gid=0#gid=0
-DATABASE_URL = os.environ["DATABASE_URL"]       # из Secrets
-TARGET_TABLE = "hr.hr_commerce"                 # целевая таблица в БД
+# В секретах укажи ссылку на лист "Численность РИМ" (gid=0)
+SHEET_URL    = os.environ.get("SHEET_URL")     # из GitHub Secrets, например: .../edit?gid=0#gid=0
+DATABASE_URL = os.environ["DATABASE_URL"]      # из GitHub Secrets
+TARGET_TABLE = "hr.hr_commerce"                # целевая таблица в БД
 
 def make_csv_url(u: str) -> str:
     m_id  = re.search(r"/spreadsheets/d/([^/]+)/", u)
@@ -112,12 +112,13 @@ RENAME_MAP = {
     'Продажи КС':'sales_ks',
     'Должность КС':'position_ks',
     'Отдел продаж':'sales_department',
+    # если была ещё колонка "Стаж (свод)" и её удалили — просто не будет в пересечении
 }
 
 def main():
     # 1) читаем лист
     if not SHEET_URL:
-        raise RuntimeError("SHEET_URL is not set. Put your Google Sheets link with gid=... into secrets.")
+        raise RuntimeError("SHEET_URL is not set. Put your Google Sheets link with gid=... into GitHub Secrets.")
     df_raw = get_csv_df(SHEET_URL)
     df = df_raw.copy()
     df.columns = clean_headers(df.columns)
@@ -142,9 +143,7 @@ def main():
     db_types = {c: t for c, t in cols_db}
     db_cols_order = [c for c, _ in cols_db]
 
-    # 3) построение маппинга колонок:
-    #    - если имя колонки уже совпадает с БД — берем как есть;
-    #    - иначе пробуем русско-английскую карту RENAME_MAP.
+    # 3) построение маппинга колонок (пересечение по имени + карта RENAME_MAP)
     present = {}
     for col in df.columns:
         if col in db_cols_order:
@@ -156,7 +155,7 @@ def main():
         raise RuntimeError("No columns matched between sheet headers and DB schema/RENAME_MAP.")
     df = df[keep].rename(columns=present).copy()
 
-    # 4) приведение типов из фактической схемы БД
+    # 4) приведение типов под схему БД
     for c, t in db_types.items():
         if c in df.columns and t == 'date':
             df[c] = df[c].map(to_date_iso)
@@ -164,15 +163,17 @@ def main():
         if c in df.columns and t in {'integer','bigint','smallint'}:
             df[c] = df[c].map(to_int_or_none).astype("Int64")
 
+    # итоговая последовательность колонок — как в БД, без updated_at
     load_cols = [c for c in db_cols_order if c in df.columns and c != 'updated_at']
     if not load_cols:
         raise RuntimeError("No common columns after mapping (after excluding updated_at).")
 
+    # 5) соберём CSV-буфер для COPY
     buf = io.StringIO()
     df[load_cols].to_csv(buf, index=False)
     buf.seek(0)
 
-    # 5) очистка и COPY
+    # 6) очистка и COPY
     used_delete = False
     try:
         cur.execute("BEGIN;")
@@ -188,4 +189,12 @@ def main():
 
     cur = conn.cursor()
     cur.execute("BEGIN;")
-    copy_sql = f"C_
+    copy_sql = f"COPY {TARGET_TABLE} ({', '.join(load_cols)}) FROM STDIN WITH CSV HEADER ENCODING 'UTF8'"
+    cur.copy_expert(copy_sql, buf)
+    cur.execute("COMMIT;")
+    cur.close(); conn.close()
+
+    print(f"OK | rows={len(df)} | cols={len(load_cols)} | mode={'DELETE' if used_delete else 'TRUNCATE'}")
+
+if __name__ == "__main__":
+    main()
