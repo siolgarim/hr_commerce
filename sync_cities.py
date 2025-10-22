@@ -51,7 +51,11 @@ def main():
     df = get_csv_df(SHEET_URL)
     df.columns = clean_headers(df.columns)
 
+    if '.' in TARGET_TABLE:
     schema, table = TARGET_TABLE.split('.', 1)
+else:
+    schema, table = 'public', TARGET_TABLE
+
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
 
