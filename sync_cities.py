@@ -62,7 +62,7 @@ def main():
     df = df[load_cols].copy()
 
     # 3) привести числовые поля к int (lop, static, digital), если они есть
-    for num_col in ("lop", "static", "digital"):
+    for num_col in ("static", "digital"):
         if num_col in df.columns:
             df[num_col] = df[num_col].map(to_int_or_none).astype("Int64")
 
