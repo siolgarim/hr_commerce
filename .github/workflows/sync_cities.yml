@@ -1,7 +1,7 @@
 name: Sync Cities to Postgres
 
 on:
-  workflow_dispatch:  # запуск вручную
+  workflow_dispatch:  # запуск вручную через Actions
 
 jobs:
   sync:
