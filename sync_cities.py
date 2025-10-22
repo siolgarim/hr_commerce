@@ -6,7 +6,7 @@ import numpy as np
 # --- конфиг из GitHub Secrets ---
 SHEET_URL    = os.environ.get("CITIES_SHEET_URL")   # ссылка на лист "Города" (с gid=...)
 DATABASE_URL = os.environ["DATABASE_URL"]           # строка подключения к Postgres
-TARGET_TABLE = os.environ.get("TARGET_TABLE", "lop_cities")  # можно переопределить секретом/vars
+TARGET_TABLE = os.environ.get("TARGET_TABLE", "hr.lop_cities")  # можно переопределить секретом/vars
 
 # ---------- утилиты ----------
 def make_csv_url(u: str) -> str:
