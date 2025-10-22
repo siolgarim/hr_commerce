@@ -6,7 +6,7 @@ import numpy as np
 # Новая таблица — Google Sheets (лист "Города")
 SHEET_URL    = os.environ.get("CITIES_SHEET_URL")  # Укажи в Secrets
 DATABASE_URL = os.environ["DATABASE_URL"]
-TARGET_TABLE = "lop.cities"                         # Название таблицы в БД
+TARGET_TABLE = "lop_cities"                         # Название таблицы в БД
 
 def make_csv_url(u: str) -> str:
     m_id  = re.search(r"/spreadsheets/d/([^/]+)/", u)
