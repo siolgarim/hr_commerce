@@ -6,7 +6,7 @@ import numpy as np
 # ── Конфиг из GitHub Secrets ─────────────────────────────────────────────
 CITIES_SHEET_URL = os.environ.get("CITIES_SHEET_URL")   # ссылка на лист "Города" (c gid=0)
 DATABASE_URL     = os.environ["DATABASE_URL"]           # строка подключения к Postgres
-TARGET_TABLE     = "hr.lop_cities"                      # целевая таблица в БД (лежит в схеме hr)
+TARGET_TABLE     = "analytics.lop_cities"                      # целевая таблица в БД (лежит в схеме hr)
 # ─────────────────────────────────────────────────────────────────────────
 
 # Ожидаемые колонки на листе и в БД
