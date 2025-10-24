@@ -6,7 +6,7 @@ import numpy as np
 # В секретах укажи ссылку на лист "Численность РИМ" (gid=0)
 SHEET_URL    = os.environ.get("SHEET_URL")     # из GitHub Secrets, например: .../edit?gid=0#gid=0
 DATABASE_URL = os.environ["DATABASE_URL"]      # из GitHub Secrets
-TARGET_TABLE = "hr.hr_employees"                # целевая таблица в БД
+TARGET_TABLE = "analytics.hr_employees"                # целевая таблица в БД
 
 def make_csv_url(u: str) -> str:
     m_id  = re.search(r"/spreadsheets/d/([^/]+)/", u)
