@@ -6,7 +6,7 @@ import numpy as np
 # В секретах укажи ссылку на лист "Численность РИМ" (gid=0)
 SHEET_URL    = os.environ.get("SHEET_URL")     # из GitHub Secrets, например: .../edit?gid=0#gid=0
 DATABASE_URL = os.environ["DATABASE_URL"]      # из GitHub Secrets
-TARGET_TABLE = "analytics.hr_employees"                # целевая таблица в БД
+TARGET_TABLE = "analytics.hr_employees"        # целевая таблица в БД
 
 def make_csv_url(u: str) -> str:
     m_id  = re.search(r"/spreadsheets/d/([^/]+)/", u)
@@ -112,7 +112,6 @@ RENAME_MAP = {
     'Продажи КС':'sales_ks',
     'Должность КС':'position_ks',
     'Отдел продаж':'sales_department',
-    # если была ещё колонка "Стаж (свод)" и её удалили — просто не будет в пересечении
 }
 
 def main():
@@ -189,10 +188,15 @@ def main():
 
     cur = conn.cursor()
     cur.execute("BEGIN;")
-    copy_sql = f"COPY {TARGET_TABLE} ({', '.join(load_cols)}) FROM STDIN WITH CSV HEADER ENCODING 'UTF8'"
+    
+    # ИСПРАВЛЕНИЕ: заключаем имена колонок в двойные кавычки
+    quoted_cols = [f'"{col}"' for col in load_cols]
+    copy_sql = f"COPY {TARGET_TABLE} ({', '.join(quoted_cols)}) FROM STDIN WITH CSV HEADER ENCODING 'UTF8'"
+    
     cur.copy_expert(copy_sql, buf)
     cur.execute("COMMIT;")
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
 
     print(f"OK | rows={len(df)} | cols={len(load_cols)} | mode={'DELETE' if used_delete else 'TRUNCATE'}")
 
