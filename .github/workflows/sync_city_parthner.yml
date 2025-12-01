@@ -1,0 +1,34 @@
+name: Sync City Parthner Sheet to Postgres
+
+on:
+  workflow_dispatch:
+  schedule:
+    # каждый день в 07:00 по UTC (в Берлине будет 08:00 зимой / 09:00 летом)
+    - cron: "0 7 * * *"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests psycopg2-binary
+
+      - name: Run sync
+        env:
+          CITIES_PARTHNER_SHEET_URL: ${{ secrets.CITIES_PARTHNER_SHEET_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # если хочешь задать другую таблицу без правки кода — добавь секрет TARGET_TABLE
+          TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
+        run: |
+          python sync_city_parthner.py
