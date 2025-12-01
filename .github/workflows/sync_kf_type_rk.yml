@@ -1,4 +1,4 @@
-name: Sync City Parthner Sheet to Postgres
+name: sync_kf_type_rk
 
 on:
   workflow_dispatch:
