@@ -9,7 +9,7 @@ DATABASE_URL = os.environ["DATABASE_URL"]                               # стр
 
 # целевая таблица: можно задать секретом/переменной TARGET_TABLE,
 # иначе будет дефолт:
-TARGET_TABLE = os.environ.get("TARGET_TABLE", "analytics.lop_cities_parthner")
+TARGET_TABLE = os.environ.get("TARGET_TABLE", "analytics.partner_cities_oc_rate")
 # ────────────────────────────────────────────────────────────────────────
 
 # Ожидаемые колонки на листе и в БД (если у партнёров другие — поменяй тут)
