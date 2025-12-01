@@ -28,7 +28,5 @@ jobs:
         env:
           CITIES_PARTHNER_SHEET_URL: ${{ secrets.CITIES_PARTHNER_SHEET_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          # если хочешь задать другую таблицу без правки кода — добавь секрет TARGET_TABLE
-          TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
         run: |
           python sync_city_parthner.py
