@@ -8,7 +8,6 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -25,9 +24,8 @@ jobs:
 
       - name: Run sync
         env:
-  KF_TYPE_RK: ${{ secrets.KF_TYPE_RK }}
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
-
+          KF_TYPE_RK: ${{ secrets.KF_TYPE_RK }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
         run: |
-          python sync_city_parthner.py
+          python sync_kf_type_rk.py
