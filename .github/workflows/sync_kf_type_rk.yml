@@ -3,7 +3,6 @@ name: sync_kf_type_rk
 on:
   workflow_dispatch:
   schedule:
-    # каждый день в 07:00 по UTC (в Берлине будет 08:00 зимой / 09:00 летом)
     - cron: "0 7 * * *"
 
 jobs:
@@ -26,7 +25,8 @@ jobs:
 
       - name: Run sync
         env:
-          CITIES_PARTHNER_SHEET_URL: ${{ secrets.CITIES_PARTHNER_SHEET_URL }}
+          KF_TYPE_RK: ${{ secrets.KF_TYPE_RK }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
         run: |
           python sync_city_parthner.py
