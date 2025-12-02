@@ -25,8 +25,9 @@ jobs:
 
       - name: Run sync
         env:
-          KF_TYPE_RK: ${{ secrets.KF_TYPE_RK }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
+  KF_TYPE_RK: ${{ secrets.KF_TYPE_RK }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
+
         run: |
           python sync_city_parthner.py
