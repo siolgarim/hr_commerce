@@ -2,9 +2,6 @@ name: Sync City Parthner Sheet to Postgres
 
 on:
   workflow_dispatch:
-  schedule:
-    # каждый день в 07:00 по UTC (в Берлине будет 08:00 зимой / 09:00 летом)
-    - cron: "0 7 * * *"
 
 jobs:
   sync:
@@ -28,5 +25,6 @@ jobs:
         env:
           CITIES_PARTHNER_SHEET_URL: ${{ secrets.CITIES_PARTHNER_SHEET_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TARGET_TABLE: ${{ secrets.TARGET_TABLE }}
         run: |
           python sync_city_parthner.py
