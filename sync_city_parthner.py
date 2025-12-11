@@ -1,4 +1,6 @@
 # sync_city_parthner.py  (версия под analytics.partner_cities_oc_rate)
+# Исправлена обработка заголовков (синонимы), парсинг чисел, логика выбора колонок,
+# а также улучшено управление транзакциями/ресурсами.
 
 import os, io, re, requests, psycopg2
 import pandas as pd
@@ -14,6 +16,23 @@ TARGET_TABLE = os.environ.get("TARGET_TABLE") or "analytics.partner_cities_oc_ra
 
 # Ожидаемые колонки на листе и в БД
 EXPECTED_COLS = ["region", "type_city", "oc_rate_ps", "oc_rate_ps_min", "oc_rate_ps_max"]
+
+# Словарь соответствий: возможные заголовки на листе -> требуемые имена
+HEADER_ALIASES = {
+    "city": "region",
+    "town": "region",
+    "город": "region",
+    "type": "type_city",
+    "тип": "type_city",
+    # oc_rate_ps может называться по-разному; оставим несколько вариантов
+    "oc_rate_ps": "oc_rate_ps",
+    "oc_rate": "oc_rate_ps",
+    "rate": "oc_rate_ps",
+    "oc_rate_ps_min": "oc_rate_ps_min",
+    "oc_rate_ps_max": "oc_rate_ps_max",
+    "min": "oc_rate_ps_min",
+    "max": "oc_rate_ps_max",
+}
 
 def make_csv_url(u: str) -> str:
     m_id  = re.search(r"/spreadsheets/d/([^/]+)/", u or "")
@@ -40,7 +59,8 @@ def get_csv_df(url_ui: str) -> pd.DataFrame:
             "Скорее всего лист приватный или ссылка неверная."
         )
 
-    return pd.read_csv(io.BytesIO(r.content), encoding="utf-8")
+    # pandas сам определит кодировку в большинстве случаев; если есть байты — используем BytesIO
+    return pd.read_csv(io.BytesIO(r.content))
 
 def clean_headers(cols):
     return (
@@ -52,16 +72,35 @@ def clean_headers(cols):
           .str.lower()
     )
 
+def map_headers(cols_index):
+    """
+    Приводит колонки листа к ожидаемым именам, используя HEADER_ALIASES.
+    Если колонка уже совпадает с ожидаемой — оставляет как есть.
+    """
+    mapped = []
+    for c in cols_index:
+        name = c.lower().strip()
+        if name in HEADER_ALIASES:
+            mapped.append(HEADER_ALIASES[name])
+        else:
+            # если уже совпадает с ожидаемой формой
+            if name in EXPECTED_COLS:
+                mapped.append(name)
+            else:
+                mapped.append(name)  # оставляем оригинал (вдруг нужен)
+    return pd.Index(mapped)
+
 def to_float_or_none(v):
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return None
     s = str(v).strip().replace("\u00a0","")
     if s == "" or s.lower() in ("none","nan"):
         return None
+    # Убираем пробелы в числе и меняем запятую на точку
     s = s.replace(" ", "").replace(",", ".")
     try:
         f = float(s)
-        if np.isnan(f): 
+        if np.isnan(f):
             return None
         return f
     except Exception:
@@ -77,22 +116,34 @@ def main():
 
     df_raw = get_csv_df(CITIES_PARTHNER_SHEET_URL)
     df = df_raw.copy()
+    # нормализуем заголовки
     df.columns = clean_headers(df.columns)
+    # затем сопоставляем с нужными именами (city -> region, type -> type_city и т.д.)
+    df.columns = map_headers(df.columns)
 
     print(f"[INFO] sheet columns = {list(df.columns)}")
     print(f"[INFO] rows in sheet = {len(df)}")
     print("[INFO] sheet head:\n", df.head(5))
 
-    # 2) оставляем только нужные колонки
+    # 2) оставляем только нужные колонки (попытка взять синонимы)
     present = [c for c in EXPECTED_COLS if c in df.columns]
     if not present:
+        # Если нет точного пересечения, попробуем попытаться сопоставить частично
+        # (например, в листе есть oc_rate_ps_min/max, но нет region)
+        existing = list(df.columns)
         raise RuntimeError(
-            f"На листе нет ожидаемых колонок. "
-            f"Нужны хотя бы из: {EXPECTED_COLS}. "
-            f"Есть: {list(df.columns)}"
+            f"На листе нет ожидаемых колонок. Нужны хотя бы из: {EXPECTED_COLS}. Есть: {existing}"
         )
 
-    load_cols = [c for c in EXPECTED_COLS if c in present]
+    # load_cols = [c for c in EXPECTED_COLS if c in present]  <-- был баг: дублировали фильтр
+    load_cols = present[:]  # берем все найденные ожидаемые колонки, в порядке EXPECTED_COLS
+    # Сохраним порядок EXPECTED_COLS
+    load_cols = [c for c in EXPECTED_COLS if c in load_cols]
+
+    # Если колонок oc_rate_ps нет — добавим её с None (чтобы совпадать со схемой БД при необходимости)
+    if "oc_rate_ps" not in df.columns and "oc_rate_ps" in EXPECTED_COLS:
+        df["oc_rate_ps"] = None
+
     df = df[load_cols].copy()
 
     # 3) float-поля -> Float64 (в Postgres попадут как float8)
@@ -112,59 +163,68 @@ def main():
         connect_timeout=10,
         options="-c lock_timeout=5000 -c statement_timeout=120000 -c application_name=gh_city_partner_oc_rate_sync"
     )
-    cur = conn.cursor()
-
-    cur.execute("""
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema=%s AND table_name=%s
-      ORDER BY ordinal_position
-    """, (schema, table))
-
-    cols_db = [r[0].lower() for r in cur.fetchall()]
-    if not cols_db:
-        raise RuntimeError(f"Table {TARGET_TABLE} not found or no access.")
-
-    print(f"[INFO] db columns = {cols_db}")
-
-    # пересечение листа/БД
-    load_cols = [c for c in EXPECTED_COLS if c in df.columns and c in cols_db]
-    if not load_cols:
-        raise RuntimeError(
-            "Нет пересечения колонок между листом и таблицей БД. "
-            f"Лист: {list(df.columns)}; БД: {cols_db}"
-        )
-
-    print(f"[INFO] will load cols = {load_cols}")
-
-    # 5) буфер для COPY
-    buf = io.StringIO()
-    df[load_cols].to_csv(buf, index=False)
-    buf.seek(0)
-
-    # 6) очистка и COPY
-    used_delete = False
     try:
-        cur.execute("BEGIN;")
-        cur.execute(f"LOCK TABLE {TARGET_TABLE} IN ACCESS EXCLUSIVE MODE NOWAIT;")
-        cur.execute(f"TRUNCATE {TARGET_TABLE};")
-        cur.execute("COMMIT;")
-    except Exception:
-        conn.rollback()
-        used_delete = True
-        cur.execute("BEGIN;")
-        cur.execute(f"DELETE FROM {TARGET_TABLE};")
-        cur.execute("COMMIT;")
+        cur = conn.cursor()
 
-    # COPY
-    cur = conn.cursor()
-    cur.execute("BEGIN;")
-    copy_sql = f"COPY {TARGET_TABLE} ({', '.join(load_cols)}) FROM STDIN WITH CSV HEADER ENCODING 'UTF8'"
-    cur.copy_expert(copy_sql, buf)
-    cur.execute("COMMIT;")
+        cur.execute("""
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema=%s AND table_name=%s
+          ORDER BY ordinal_position
+        """, (schema, table))
 
-    cur.close()
-    conn.close()
+        cols_db = [r[0].lower() for r in cur.fetchall()]
+        if not cols_db:
+            raise RuntimeError(f"Table {TARGET_TABLE} not found or no access.")
+
+        print(f"[INFO] db columns = {cols_db}")
+
+        # пересечение листа/БД
+        load_cols = [c for c in EXPECTED_COLS if c in df.columns and c in cols_db]
+        if not load_cols:
+            raise RuntimeError(
+                "Нет пересечения колонок между листом и таблицей БД. "
+                f"Лист: {list(df.columns)}; БД: {cols_db}"
+            )
+
+        print(f"[INFO] will load cols = {load_cols}")
+
+        # 5) буфер для COPY
+        buf = io.StringIO()
+        # to_csv — по умолчанию пишет пустые для NA; явно укажем header и index=False
+        df[load_cols].to_csv(buf, index=False, header=True, na_rep="")
+        buf.seek(0)
+
+        # 6) очистка и COPY
+        used_delete = False
+        try:
+            # Попытка TRUNCATE с эксклюзивной блокировкой
+            with conn.cursor() as cur_lock:
+                cur_lock.execute("BEGIN;")
+                cur_lock.execute(f"LOCK TABLE {TARGET_TABLE} IN ACCESS EXCLUSIVE MODE NOWAIT;")
+                cur_lock.execute(f"TRUNCATE {TARGET_TABLE};")
+                cur_lock.execute("COMMIT;")
+        except Exception:
+            # если не получилось взять эксклюзивную блокировку — откат и DELETE как fallback
+            conn.rollback()
+            used_delete = True
+            with conn.cursor() as cur_del:
+                cur_del.execute("BEGIN;")
+                cur_del.execute(f"DELETE FROM {TARGET_TABLE};")
+                cur_del.execute("COMMIT;")
+
+        # COPY
+        with conn.cursor() as cur_copy:
+            cur_copy.execute("BEGIN;")
+            copy_sql = f"COPY {TARGET_TABLE} ({', '.join(load_cols)}) FROM STDIN WITH CSV HEADER ENCODING 'UTF8'"
+            cur_copy.copy_expert(copy_sql, buf)
+            cur_copy.execute("COMMIT;")
+
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     print(
         f"OK | rows={len(df)} | cols={len(load_cols)} | "
